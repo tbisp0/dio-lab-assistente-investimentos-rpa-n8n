@@ -1,0 +1,159 @@
+{
+  "name": "RPA - Assistente de Investimentos (Etapa 4 - MVP Mensagens Estaticas)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "Clientes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        180,
+        340
+      ],
+      "id": "webhook-clientes-id",
+      "name": "Webhook",
+      "webhookId": "clientes-rpa-dio"
+    },
+    {
+      "parameters": {
+        "url": "https://digitalinnovationone.github.io/dio-lab-assistente-investimentos-rpa-n8n/data.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        340
+      ],
+      "id": "http-request-csv-id",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai o texto do CSV e converte em JSON estruturado\nconst item = $input.first().json;\nlet rawCsv = '';\n\nif (typeof item === 'string') {\n  rawCsv = item;\n} else if (item.data && typeof item.data === 'string') {\n  rawCsv = item.data;\n} else {\n  rawCsv = Object.keys(item).join(',');\n}\n\nconst lines = rawCsv.trim().split(/\\r?\\n/);\nconst headers = lines[0].split(',').map(h => h.trim());\n\nconst investimentos = [];\nfor (let i = 1; i < lines.length; i++) {\n  const row = lines[i].trim();\n  if (!row) continue;\n  const values = row.split(',').map(v => v.trim());\n  const obj = {};\n  headers.forEach((h, idx) => {\n    obj[h] = values[idx] || '';\n  });\n  investimentos.push(obj);\n}\n\nreturn [{\n  json: {\n    investimentos: investimentos\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        340
+      ],
+      "id": "code-javascript-id",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        840,
+        240
+      ],
+      "id": "merge-node-id",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ETAPA 4 (MVP): Cruzamento de Perfis e Geração de Mensagens Estáticas\nconst mergedData = $input.first().json;\nconst clientes = mergedData.body?.clientes || mergedData.clientes || [];\nconst investimentos = mergedData.investimentos || [];\n\nconst clientesProcessados = clientes.map(cliente => {\n  const perfilCliente = (cliente.perfil || '').toLowerCase().trim();\n  const opcoes = investimentos.filter(inv => \n    (inv.perfil || '').toLowerCase().trim() === perfilCliente\n  );\n\n  const listaOpcoesTexto = opcoes.map(op => `${op.produto} (Rentabilidade: ${op.rentabilidade}, Mín: R$ ${op.minimo})`).join('; ');\n  \n  let mensagem = '';\n  if (perfilCliente === 'conservador') {\n    mensagem = `Olá, ${cliente.nome}! Identificamos seu perfil CONSERVADOR com foco absoluto em segurança e preservação de capital. Considerando seu saldo disponível de ${cliente.saldo}, recomendamos aplicar em produtos de baixo risco com liquidez: ${listaOpcoesTexto}.`;\n  } else if (perfilCliente === 'moderado') {\n    mensagem = `Olá, ${cliente.nome}! Com base no seu perfil MODERADO, buscando equilíbrio entre segurança e rentabilidade, recomendamos alocar seu saldo de ${cliente.saldo} de forma diversificada em: ${listaOpcoesTexto}.`;\n  } else if (perfilCliente === 'arrojado') {\n    mensagem = `Olá, ${cliente.nome}! Sendo um investidor de perfil ARROJADO focado em maior potencial de retorno e tolerância a risco, sugerimos alocar seu saldo de ${cliente.saldo} nas seguintes oportunidades de renda variável: ${listaOpcoesTexto}.`;\n  } else {\n    mensagem = `Olá, ${cliente.nome}! Analisamos seu saldo de ${cliente.saldo} e temos opções personalizadas para o seu momento financeiro.`;\n  }\n\n  return {\n    nome: cliente.nome,\n    email: cliente.email,\n    saldo: cliente.saldo,\n    perfil: cliente.perfil,\n    recomendacoes: opcoes,\n    mensagem: mensagem\n  };\n});\n\nreturn [{\n  json: {\n    sucesso: true,\n    total_processado: clientesProcessados.length,\n    clientes: clientesProcessados\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        340
+      ],
+      "id": "code-javascript-1-id",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1280,
+        340
+      ],
+      "id": "respond-webhook-id",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

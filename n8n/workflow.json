@@ -1,0 +1,450 @@
+{
+  "name": "RPA - Assistente de Investimentos (Enterprise: IA + Email Resiliente)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🟦 ZONA 1: INGESTÃO DE DADOS\n- Webhook recebe clientes via POST do RPA (Python)\n- HTTP Request baixa catálogo de investimentos (data.csv)\n- Nó Parse converte texto CSV em JSON tabular",
+        "height": 420,
+        "width": 640,
+        "color": 1
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        60,
+        140
+      ],
+      "id": "sticky-zona-1",
+      "name": "Sticky Note - Ingestao"
+    },
+    {
+      "parameters": {
+        "content": "## 🟩 ZONA 2: ENRIQUECIMENTO & REGRAS DE NEGÓCIO\n- Merge combina dados dos clientes com catálogo de ativos\n- Cruzamento de regras: Perfil do Cliente x Ativos Permitidos\n- Vinculação de rentabilidades e aportes mínimos",
+        "height": 420,
+        "width": 460,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        740,
+        140
+      ],
+      "id": "sticky-zona-2",
+      "name": "Sticky Note - Enriquecimento"
+    },
+    {
+      "parameters": {
+        "content": "## 🟪 ZONA 3: IA GENERATIVA & COGNIÇÃO\n- Desmembramento do lote em 10 itens individuais\n- Engenharia de Prompt consultiva e humanizada\n- Invocação do Google Gemini (gemini-2.5-flash / gemini-1.5-flash)\n- Fallback automático caso a API atinja limites de quota\n- Consolidação estruturada da recomendação gerada",
+        "height": 420,
+        "width": 660,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        140
+      ],
+      "id": "sticky-zona-3",
+      "name": "Sticky Note - IA Generativa"
+    },
+    {
+      "parameters": {
+        "content": "## 🟧 ZONA 4: GOVERNANÇA, ENTREGA & RESPOSTA\n- Validação defensiva: Email existente vs inexistente\n- Throttling de envio (1s) para prevenção de bloqueio de spam\n- Disparo resiliente via Gmail (Continue on Fail)\n- Tratamento para clientes sem email\n- Resposta síncrona consolidada Status 200",
+        "height": 420,
+        "width": 820,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1940,
+        140
+      ],
+      "id": "sticky-zona-4",
+      "name": "Sticky Note - Governanca e Entrega"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "Clientes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        340
+      ],
+      "id": "webhook-clientes-id",
+      "name": "Webhook: Ingestão de Clientes",
+      "webhookId": "clientes-rpa-dio"
+    },
+    {
+      "parameters": {
+        "url": "https://digitalinnovationone.github.io/dio-lab-assistente-investimentos-rpa-n8n/data.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        340
+      ],
+      "id": "http-request-csv-id",
+      "name": "HTTP Request: Catálogo de Investimentos"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai o texto do CSV retornado pelo HTTP Request e converte em JSON estruturado\nconst item = $input.first().json;\nlet rawCsv = '';\n\nif (typeof item === 'string') {\n  rawCsv = item;\n} else if (item.data && typeof item.data === 'string') {\n  rawCsv = item.data;\n} else {\n  rawCsv = Object.keys(item).join(',');\n}\n\nconst lines = rawCsv.trim().split(/\\r?\\n/);\nconst headers = lines[0].split(',').map(h => h.trim());\n\nconst investimentos = [];\nfor (let i = 1; i < lines.length; i++) {\n  const row = lines[i].trim();\n  if (!row) continue;\n  const values = row.split(',').map(v => v.trim());\n  const obj = {};\n  headers.forEach((h, idx) => {\n    obj[h] = values[idx] || '';\n  });\n  investimentos.push(obj);\n}\n\nreturn [{\n  json: {\n    investimentos: investimentos\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        340
+      ],
+      "id": "code-javascript-id",
+      "name": "Transform: Parse CSV Investimentos"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        780,
+        240
+      ],
+      "id": "merge-node-id",
+      "name": "Merge: Combinar Clientes e Ativos"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Resiliência máxima: obtém os dados combinados ou direto dos nós originais\nlet clientes = [];\nlet investimentos = [];\n\ntry {\n  const merged = $input.first().json;\n  clientes = merged.body?.clientes || merged.clientes || [];\n  investimentos = merged.investimentos || [];\n} catch (e) {}\n\nif (!clientes.length) {\n  try {\n    clientes = $('Webhook: Ingestão de Clientes').first().json.body.clientes || [];\n  } catch (e) {}\n}\n\nif (!investimentos.length) {\n  try {\n    investimentos = $('Transform: Parse CSV Investimentos').first().json.investimentos || [];\n  } catch (e) {}\n}\n\nconst clientesEnriquecidos = clientes.map(cliente => {\n  const perfil = (cliente.perfil || '').toLowerCase().trim();\n  const opcoes = investimentos.filter(inv => \n    (inv.perfil || '').toLowerCase().trim() === perfil\n  );\n  return {\n    ...cliente,\n    produtos_compativeis: opcoes\n  };\n});\n\nreturn [{\n  json: {\n    total: clientesEnriquecidos.length,\n    clientes: clientesEnriquecidos\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        340
+      ],
+      "id": "code-javascript-1-id",
+      "name": "Logic: Cruzamento Perfil x Ativos"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Desmembra o lote em 10 itens individuais para inferência atômica da IA\nconst clientes = $input.first().json.clientes || [];\n\nreturn clientes.map(cliente => {\n  const opcoesStr = (cliente.produtos_compativeis || []).map(p => \n    `- ${p.produto} (Rentabilidade: ${p.rentabilidade}, Aporte Mínimo: R$ ${p.minimo})`\n  ).join('\\n');\n\n  const prompt = `Você é um assessor de investimentos consultivo, sênior e empático.\\nCrie uma recomendação financeira personalizada e humanizada para o cliente abaixo:\\n\\nNome: ${cliente.nome}\\nEmail: ${cliente.email}\\nSaldo Disponível: ${cliente.saldo}\\nPerfil de Risco: ${cliente.perfil}\\n\\nOpções de Ativos Compatíveis:\\n${opcoesStr}\\n\\nDiretrizes:\\n1. Cumprimente o cliente pelo nome com profissionalismo e simpatia.\\n2. Recomende as melhores opções explicando brevemente por que fazem sentido para o saldo de ${cliente.saldo}.\\n3. Mantenha o texto em 2 parágrafos concisos e encorajadores.`;\n\n  return {\n    json: {\n      nome: cliente.nome,\n      email: cliente.email,\n      saldo: cliente.saldo,\n      perfil: cliente.perfil,\n      produtos_compativeis: cliente.produtos_compativeis,\n      prompt: prompt\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        340
+      ],
+      "id": "code-javascript-2-id",
+      "name": "Prepare: Split Lote e Prompt IA"
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-1.5-flash",
+          "mode": "list"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1480,
+        240
+      ],
+      "id": "gemini-message-model-id",
+      "name": "IA: Assistente Consultivo Gemini",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "nct632oBydg4HvnE",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500
+    },
+    {
+      "parameters": {
+        "jsCode": "// Consolida o output gerado pela IA Generativa com Fallback Inteligente\nconst items = $input.all();\n\nreturn items.map(item => {\n  let iaResposta = item.json.text || \n                   item.json.response || \n                   item.json.message?.content || \n                   item.json.output || \n                   item.json.candidates?.[0]?.content?.parts?.[0]?.text;\n\n  // Se a chamada de IA oscilou por quota/rede, gera a recomendação elegante de fallback\n  if (!iaResposta || typeof iaResposta !== 'string' || iaResposta.length < 15 || iaResposta.toLowerCase().includes('unavailable')) {\n    const perfil = item.json.perfil || 'Conservador';\n    const nome = item.json.nome || 'Cliente';\n    const saldo = item.json.saldo || 'R$ 0,00';\n    if (perfil.toLowerCase().includes('conservador')) {\n      iaResposta = `Olá, ${nome}! Com base no seu perfil Conservador e saldo de ${saldo}, recomendamos opções de alta liquidez e segurança como Tesouro Selic e CDB de Liquidez Diária, garantindo a proteção e rentabilidade do seu capital.`;\n    } else if (perfil.toLowerCase().includes('moderado')) {\n      iaResposta = `Olá, ${nome}! Para o seu perfil Moderado e saldo disponível de ${saldo}, a melhor estratégia é equilibrar aplicações entre CDB Prefixado e Fundos Multimercado, capturando maior retorno com risco sob controle.`;\n    } else {\n      iaResposta = `Olá, ${nome}! Como investidor de perfil Arrojado, seu saldo de ${saldo} possui excelente margem para buscar maximização de rendimentos em Ações e Fundos de Índice (ETFs), com alto potencial no longo prazo.`;\n    }\n  }\n\n  return {\n    json: {\n      nome: item.json.nome,\n      email: item.json.email,\n      saldo: item.json.saldo,\n      perfil: item.json.perfil,\n      recomendacao_ia: iaResposta\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        340
+      ],
+      "id": "code-javascript-3-id",
+      "name": "Consolidate: Resposta da IA"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "valida-email-id",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1980,
+        340
+      ],
+      "id": "if-email-valido-id",
+      "name": "If: Email Válido?"
+    },
+    {
+      "parameters": {
+        "amount": 1,
+        "unit": "seconds"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2220,
+        240
+      ],
+      "id": "wait-throttling-id",
+      "name": "Wait: Throttling Anti-Spam (1s)"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=Assessoria Financeira: Recomendações de Investimento para {{ $json.nome }}",
+        "emailType": "text",
+        "message": "={{ $json.recomendacao_ia }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2440,
+        240
+      ],
+      "id": "gmail-send-id",
+      "name": "Gmail: Enviar Recomendação",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ramo False: Quando o e-mail não existir, anota o status explicito de email inexistente\nconst item = $input.item;\nreturn {\n  json: {\n    ...item.json,\n    status_envio: 'E-mail não informado ou inexistente na base de clientes'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        460
+      ],
+      "id": "aviso-email-inexistente-id",
+      "name": "Status: Email Inexistente"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2680,
+        340
+      ],
+      "id": "respond-webhook-id",
+      "name": "Respond to Webhook: Status 200"
+    }
+  ],
+  "connections": {
+    "Webhook: Ingestão de Clientes": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: Catálogo de Investimentos",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge: Combinar Clientes e Ativos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Catálogo de Investimentos": {
+      "main": [
+        [
+          {
+            "node": "Transform: Parse CSV Investimentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform: Parse CSV Investimentos": {
+      "main": [
+        [
+          {
+            "node": "Merge: Combinar Clientes e Ativos",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge: Combinar Clientes e Ativos": {
+      "main": [
+        [
+          {
+            "node": "Logic: Cruzamento Perfil x Ativos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logic: Cruzamento Perfil x Ativos": {
+      "main": [
+        [
+          {
+            "node": "Prepare: Split Lote e Prompt IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare: Split Lote e Prompt IA": {
+      "main": [
+        [
+          {
+            "node": "IA: Assistente Consultivo Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IA: Assistente Consultivo Gemini": {
+      "main": [
+        [
+          {
+            "node": "Consolidate: Resposta da IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidate: Resposta da IA": {
+      "main": [
+        [
+          {
+            "node": "If: Email Válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Email Válido?": {
+      "main": [
+        [
+          {
+            "node": "Wait: Throttling Anti-Spam (1s)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Status: Email Inexistente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait: Throttling Anti-Spam (1s)": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Enviar Recomendação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Enviar Recomendação": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook: Status 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status: Email Inexistente": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook: Status 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
